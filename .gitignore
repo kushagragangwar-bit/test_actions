@@ -1,0 +1,89 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.tar
+
+# Temp files
+*.tmp
+*.temp
+/tmp/
+
+# Sync files (keep scripts, ignore logs/locks)
+.sync/*.log
+.sync/*.lock
+
+
+# Cloned repositories (large, not needed for results)
+**/eval_files/repos/
+
+# Log files (not needed for GitHub push)
+**/logs/
+**/infer.log
+**/eval.log
+**/eval_files/logs/
+**/agent_server_build.log
+
+# macOS artifacts
+.DS_Store
+._*
+
+# Restructure script artifacts
+**/.restructure_done
+restructure*.log
+
+# Cloned source repos in eval Docker image build contexts
+# (These contain full repo checkouts; without this rule they'd add thousands of files)
+**/images/pr-*/powertools-lambda-typescript/
+**/images/base/core/
+**/images/base/

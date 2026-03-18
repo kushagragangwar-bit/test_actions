@@ -1,0 +1,41 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..e70953cc6
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,13 @@
++# Hugo Repository Notes
++
++## Key Patterns
++
++### Testing
++- Use `go test -vet=off ./...` to skip the vet check (there's a pre-existing panic in go vet when analyzing `resources/page` package)
++- The `TestJSEscaping` test in `tpl/internal/go_templates/texttemplate` is pre-existing failing and unrelated to core Hugo functionality
++
++### Template Metrics (`--templateMetrics` / `--templateMetricsHints`)
++- The `metrics` package implements template performance tracking
++- `TrackValue` is called from `tpl/partials/partials.go` with each partial output
++- The `diff.add()` method tracks value similarity to compute a "cache potential" factor
++- Bug fix: Changed initialization check from `!hreflect.IsTruthful(v)` to `d.count == 0` to properly set the baseline on the first call regardless of value truthfulness
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..e02d87e96 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -25,8 +25,6 @@ import (
+ 	"time"
+ 
+ 	"github.com/gohugoio/hugo/compare"
+-
+-	"github.com/gohugoio/hugo/common/hreflect"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,7 +50,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.

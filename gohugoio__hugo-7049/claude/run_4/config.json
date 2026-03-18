@@ -1,0 +1,25 @@
+{
+    "mode": "evaluation",
+    "workdir": "/benchmarks/benchmarks/eval_outputs/gohugoio__hugo-7049/claude/run_4/eval_files/workdir",
+    "patch_files": [
+        "/benchmarks/benchmarks/eval_outputs/gohugoio__hugo-7049/claude/run_4/output_converted.jsonl"
+    ],
+    "dataset_files": [
+        "/benchmarks/benchmarks/eval_outputs/.instance_jsonls/gohugoio__hugo-7049.jsonl"
+    ],
+    "force_build": false,
+    "output_dir": "/benchmarks/benchmarks/eval_outputs/gohugoio__hugo-7049/claude/run_4/eval_files/dataset",
+    "specifics": [],
+    "skips": [],
+    "repo_dir": "/benchmarks/benchmarks/eval_outputs/.shared_repos",
+    "need_clone": false,
+    "global_env": [],
+    "clear_env": true,
+    "stop_on_error": false,
+    "max_workers": 8,
+    "max_workers_build_image": 8,
+    "max_workers_run_instance": 8,
+    "log_dir": "/benchmarks/benchmarks/eval_outputs/gohugoio__hugo-7049/claude/run_4/eval_files/logs",
+    "log_level": "DEBUG",
+    "fix_patch_run_cmd": "bash -c \"apt-get update ; apt-get install -y patch ; sed -i 's@git apply.*@patch --batch --fuzz=5 -p1 -i /home/test.patch;patch --batch --fuzz=5 -p1 -i /home/fix.patch@g' /home/fix-run.sh ; chmod +x /home/*.sh ; /home/fix-run.sh\""
+}

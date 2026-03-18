@@ -1,0 +1,35 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..79c4a48ef
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,16 @@
++# Hugo Repository - Agent Notes
++
++## Key Packages
++
++- **metrics/**: Template metrics tracking (`--templateMetrics`, `--templateMetricsHints` flags)
++  - `diff.add()` calculates cache potential for template values
++  - Bug fix: `d.count == 0` check was added to initialize baseline on first call, even for truthful (non-empty) values
++
++## Testing
++
++- Run tests with `-vet=off` to avoid pre-existing vet failures in `resources/page` package
++- Example: `go test -vet=off ./metrics/ -v`
++
++## Known Issues
++
++- Pre-existing vet panic in `github.com/gohugoio/hugo/resources/page` (unrelated to metrics fix)
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..10a349413 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -52,7 +52,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 || !hreflect.IsTruthful(v) {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.

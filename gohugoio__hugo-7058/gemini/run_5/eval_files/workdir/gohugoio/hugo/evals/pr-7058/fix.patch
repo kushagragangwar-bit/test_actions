@@ -1,0 +1,222 @@
+diff --git a/hugolib/content_map.go b/hugolib/content_map.go
+index efa2254b2..d6337d01a 100644
+--- a/hugolib/content_map.go
++++ b/hugolib/content_map.go
+@@ -951,6 +951,46 @@ func (c *contentTreeRef) collectPagesAndSections() page.Pages {
+ 	return pas
+ }
+ 
++func (c *contentTreeRef) collectPagesRecursive() page.Pages {
++	var pas page.Pages
++	c.m.collectPages(c.key+cmBranchSeparator, func(c *contentNode) {
++		pas = append(pas, c.p)
++	})
++	prefix := c.key
++	if !strings.HasSuffix(prefix, "/") {
++		prefix += "/"
++	}
++	c.m.collectPages(prefix, func(c *contentNode) {
++		pas = append(pas, c.p)
++	})
++	page.SortByDefault(pas)
++
++	return pas
++}
++
++func (c *contentTreeRef) collectPagesAndSectionsRecursive() page.Pages {
++	var pas page.Pages
++	c.m.collectPages(c.key+cmBranchSeparator, func(c *contentNode) {
++		pas = append(pas, c.p)
++	})
++	prefix := c.key
++	if !strings.HasSuffix(prefix, "/") {
++		prefix += "/"
++	}
++	c.m.collectPages(prefix, func(c *contentNode) {
++		pas = append(pas, c.p)
++	})
++	c.m.collectSectionsFn(c.key, func(s string, cn *contentNode) bool {
++		if s != c.key {
++			pas = append(pas, cn.p)
++		}
++		return false
++	})
++	page.SortByDefault(pas)
++
++	return pas
++}
++
+ func (c *contentTreeRef) collectSections() page.Pages {
+ 	var pas page.Pages
+ 	c.m.collectSections(c.key, func(c *contentNode) {
+diff --git a/hugolib/content_map_page.go b/hugolib/content_map_page.go
+index c60536285..1d16bb836 100644
+--- a/hugolib/content_map_page.go
++++ b/hugolib/content_map_page.go
+@@ -788,9 +788,15 @@ type pagesMapBucket struct {
+ 	pagesInit sync.Once
+ 	pages     page.Pages
+ 
++	pagesRecursiveInit sync.Once
++	pagesRecursive     page.Pages
++
+ 	pagesAndSectionsInit sync.Once
+ 	pagesAndSections     page.Pages
+ 
++	pagesAndSectionsRecursiveInit sync.Once
++	pagesAndSectionsRecursive     page.Pages
++
+ 	sectionsInit sync.Once
+ 	sections     page.Pages
+ }
+@@ -810,6 +816,20 @@ func (b *pagesMapBucket) getPagesAndSections() page.Pages {
+ 	return b.pagesAndSections
+ }
+ 
++func (b *pagesMapBucket) getPagesRecursive() page.Pages {
++	b.pagesRecursiveInit.Do(func() {
++		b.pagesRecursive = b.owner.treeRef.collectPagesRecursive()
++	})
++	return b.pagesRecursive
++}
++
++func (b *pagesMapBucket) getPagesAndSectionsRecursive() page.Pages {
++	b.pagesAndSectionsRecursiveInit.Do(func() {
++		b.pagesAndSectionsRecursive = b.owner.treeRef.collectPagesAndSectionsRecursive()
++	})
++	return b.pagesAndSectionsRecursive
++}
++
+ func (b *pagesMapBucket) getSections() page.Pages {
+ 	b.sectionsInit.Do(func() {
+ 		if b.owner.treeRef == nil {
+diff --git a/hugolib/page.go b/hugolib/page.go
+index f0f695227..8ee240202 100644
+--- a/hugolib/page.go
++++ b/hugolib/page.go
+@@ -179,6 +179,55 @@ func (p *pageState) getPagesAndSections() page.Pages {
+ 	return b.getPagesAndSections()
+ }
+ 
++func (p *pageState) getPagesRecursive() page.Pages {
++	b := p.bucket
++	if b == nil {
++		return nil
++	}
++	return b.getPagesRecursive()
++}
++
++func (p *pageState) getPagesAndSectionsRecursive() page.Pages {
++	b := p.bucket
++	if b == nil {
++		return nil
++	}
++	return b.getPagesAndSectionsRecursive()
++}
++
++func (p *pageState) RegularPagesRecursive() page.Pages {
++	p.regularPagesRecursiveInit.Do(func() {
++		var pages page.Pages
++
++		switch p.Kind() {
++		case page.KindSection, page.KindHome:
++			pages = p.getPagesRecursive()
++		default:
++			pages = p.RegularPages()
++		}
++
++		p.regularPagesRecursive = pages
++	})
++
++	return p.regularPagesRecursive
++}
++
++func (p *pageState) PagesRecursive() page.Pages {
++	p.pagesRecursiveInit.Do(func() {
++		var pages page.Pages
++
++		switch p.Kind() {
++		case page.KindSection, page.KindHome:
++			pages = p.getPagesAndSectionsRecursive()
++		default:
++			pages = p.Pages()
++		}
++
++		p.pagesRecursive = pages
++	})
++
++	return p.pagesRecursive
++}
+ func (p *pageState) RegularPages() page.Pages {
+ 	p.regularPagesInit.Do(func() {
+ 		var pages page.Pages
+diff --git a/hugolib/page__common.go b/hugolib/page__common.go
+index 8187f6719..2d5d18675 100644
+--- a/hugolib/page__common.go
++++ b/hugolib/page__common.go
+@@ -141,4 +141,10 @@ type pagePages struct {
+ 
+ 	regularPagesInit sync.Once
+ 	regularPages     page.Pages
++
++	pagesRecursiveInit sync.Once
++	pagesRecursive     page.Pages
++
++	regularPagesRecursiveInit sync.Once
++	regularPagesRecursive     page.Pages
+ }
+diff --git a/resources/page/page.go b/resources/page/page.go
+index 1225f43d0..6fad5c20f 100644
+--- a/resources/page/page.go
++++ b/resources/page/page.go
+@@ -64,6 +64,12 @@ type ChildCareProvider interface {
+ 	// use RegularPages.
+ 	RegularPages() Pages
+ 
++	// RegularPagesRecursive returns all regular pages below the current section.
++	RegularPagesRecursive() Pages
++
++	// PagesRecursive returns all pages below the current section.
++	PagesRecursive() Pages
++
+ 	Resources() resource.Resources
+ }
+ 
+diff --git a/resources/page/page_nop.go b/resources/page/page_nop.go
+index ccfbf525f..86648b781 100644
+--- a/resources/page/page_nop.go
++++ b/resources/page/page_nop.go
+@@ -294,6 +294,14 @@ func (p *nopPage) RegularPages() Pages {
+ 	return nil
+ }
+ 
++func (p *nopPage) RegularPagesRecursive() Pages {
++	return nil
++}
++
++func (p *nopPage) PagesRecursive() Pages {
++	return nil
++}
++
+ func (p *nopPage) Paginate(seq interface{}, options ...interface{}) (*Pager, error) {
+ 	return nil, nil
+ }
+diff --git a/resources/page/testhelpers_test.go b/resources/page/testhelpers_test.go
+index 9c8605dad..0e2df5e49 100644
+--- a/resources/page/testhelpers_test.go
++++ b/resources/page/testhelpers_test.go
+@@ -364,6 +364,14 @@ func (p *testPage) RegularPages() Pages {
+ 	panic("not implemented")
+ }
+ 
++func (p *testPage) RegularPagesRecursive() Pages {
++	panic("not implemented")
++}
++
++func (p *testPage) PagesRecursive() Pages {
++	panic("not implemented")
++}
++
+ func (p *testPage) Paginate(seq interface{}, options ...interface{}) (*Pager, error) {
+ 	return nil, nil
+ }

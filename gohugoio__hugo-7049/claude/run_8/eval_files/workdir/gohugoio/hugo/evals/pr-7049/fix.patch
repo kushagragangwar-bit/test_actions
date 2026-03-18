@@ -1,0 +1,57 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..9b1249368
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,33 @@
++# Hugo Repository - Agent Notes
++
++## Repository Structure
++- `metrics/` - Template metrics tracking (used by `--templateMetrics` and `--templateMetricsHints` CLI flags)
++- `tpl/partials/` - Partial template rendering; calls `TrackValue` for metrics hints
++- `tpl/tplimpl/` - Template execution; calls `MeasureSince` for timing metrics
++- `deps/deps.go` - Creates metrics provider based on `templateMetrics`/`templateMetricsHints` config flags
++
++## Key Bug Fixed: templateMetricsHints (metrics/metrics.go)
++
++### Bug
++`diff.add()` in `metrics/metrics.go` only initialized `d.baseline` when a "not truthful"
++(empty/nil/zero) value was passed. For truthful (non-empty) values, `d.baseline` remained
++`nil`, causing `howSimilar(v, nil)` to always return 0. This made `cacheFactor` always 0
++for templates producing non-empty output.
++
++### Fix
++Added `d.count == 0` check to initialize baseline for the first truthful value:
++
++```go
++if d.count == 0 {
++    d.baseline = v
++    d.count = 1
++    d.simSum = 100
++    return d
++}
++```
++
++## Testing Notes
++- `go test ./metrics/...` - Tests for the metrics package
++- Some tests in `hugolib` fail with "permission denied" for `/tmp/hugo_cache` - pre-existing environment issue
++- `TestJSEscaping` in `tpl/internal/go_templates/texttemplate` fails - pre-existing issue
++- `go vet` panics when analyzing `resources/page` package - pre-existing issue
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..73d4b3f13 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -59,6 +59,13 @@ func (d *diff) add(v interface{}) *diff {
+ 		return d
+ 	}
+ 
++	if d.count == 0 {
++		d.baseline = v
++		d.count = 1
++		d.simSum = 100
++		return d
++	}
++
+ 	d.simSum += howSimilar(v, d.baseline)
+ 	d.count++
+ 

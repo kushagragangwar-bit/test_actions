@@ -1,0 +1,100 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..e9567c573
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,30 @@
++# Hugo Repository Notes
++
++## Key Packages
++
++- **metrics/**: Template metrics tracking for `--templateMetrics` and `--templateMetricsHints` flags
++  - `diff.add()` tracks similarity of template inputs over time
++  - `howSimilar()` compares values; handles string types, compare.Eqer, and compare.ProbablyEqer
++  - `howSimilarStrings()` does word-based similarity with partition weighting
++
++## Known Pre-existing Test Failures
++
++These tests fail even without any code changes (environment issues):
++- `hugolib.TestHugoModulesTargetInSubFolder`
++- `hugolib.TestMountsPaths`
++- `hugolib.TestImageOps`
++- `hugolib.TestPageBundlerSiteWitSymbolicLinksInContent`
++- `hugolib.TestSiteWithGoModButNoModules`
++- `hugolib.TestMountsContentFile`
++- `hugolib.TestPageBundlerHome`
++- `hugolib.TestModuleAbsMount`
++- `tpl/internal/go_templates/texttemplate.TestJSEscaping`
++
++## Template Metrics Architecture
++
++Template metrics are collected in two ways:
++1. `MeasureSince()` - called from `tpl/tplimpl/template.go` for every template execution
++2. `TrackValue()` - called from `tpl/partials/partials.go` for partial template output values
++
++The `cacheFactor` = `floor(simSum / diffCount)` represents how cache-friendly a template is
++(how similar its input values are across executions). Higher = more cache-friendly.
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..9fc7c76fa 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -18,6 +18,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"math"
++	"reflect"
+ 	"sort"
+ 	"strconv"
+ 	"strings"
+@@ -25,8 +26,6 @@ import (
+ 	"time"
+ 
+ 	"github.com/gohugoio/hugo/compare"
+-
+-	"github.com/gohugoio/hugo/common/hreflect"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,10 +51,10 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+-		d.simSum = 100 // If we get only one it is very cache friendly.
++		d.simSum = 100 // First occurrence is trivially similar to itself.
+ 		return d
+ 	}
+ 
+@@ -202,6 +201,18 @@ func howSimilar(a, b interface{}) int {
+ 	as, ok1 := a.(string)
+ 	bs, ok2 := b.(string)
+ 
++	if !ok1 {
++		// Handle string-like types, e.g. template.HTML.
++		if av := reflect.ValueOf(a); av.Kind() == reflect.String {
++			as, ok1 = av.String(), true
++		}
++	}
++	if !ok2 {
++		if bv := reflect.ValueOf(b); bv.Kind() == reflect.String {
++			bs, ok2 = bv.String(), true
++		}
++	}
++
+ 	if ok1 && ok2 {
+ 		return howSimilarStrings(as, bs)
+ 	}
+@@ -238,6 +249,10 @@ func howSimilarStrings(a, b string) int {
+ 		af, bf = bf, af
+ 	}
+ 
++	if len(af) == 0 {
++		return 100
++	}
++
+ 	m1 := make(map[string]bool)
+ 	for i, x := range bf {
+ 		partition := partition(i, partitionSize)

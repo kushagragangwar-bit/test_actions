@@ -1,0 +1,70 @@
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..8a7a9dc90 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -18,6 +18,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"math"
++	"reflect"
+ 	"sort"
+ 	"strconv"
+ 	"strings"
+@@ -25,8 +26,6 @@ import (
+ 	"time"
+ 
+ 	"github.com/gohugoio/hugo/compare"
+-
+-	"github.com/gohugoio/hugo/common/hreflect"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,7 +51,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.
+@@ -169,7 +168,7 @@ func (s *Store) WriteMetrics(w io.Writer) {
+ 	sort.Sort(bySum(results))
+ 	for _, v := range results {
+ 		if s.calculateHints {
+-			fmt.Fprintf(w, "  %9d %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
++			fmt.Fprintf(w, "  %9d  %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
+ 		} else {
+ 			fmt.Fprintf(w, "  %13s  %12s  %12s  %5d  %s\n", v.sum, v.avg, v.max, v.count, v.key)
+ 		}
+@@ -199,14 +198,14 @@ func howSimilar(a, b interface{}) int {
+ 	// TODO(bep) object equality fast path, but remember that
+ 	// we can get anytning in here.
+ 
+-	as, ok1 := a.(string)
+-	bs, ok2 := b.(string)
++	v1 := reflect.ValueOf(a)
++	v2 := reflect.ValueOf(b)
+ 
+-	if ok1 && ok2 {
+-		return howSimilarStrings(as, bs)
++	if v1.IsValid() && v2.IsValid() && v1.Kind() == reflect.String && v2.Kind() == reflect.String {
++		return howSimilarStrings(v1.String(), v2.String())
+ 	}
+ 
+-	if ok1 != ok2 {
++	if reflect.TypeOf(a) != reflect.TypeOf(b) {
+ 		return 0
+ 	}
+ 
+@@ -238,6 +237,10 @@ func howSimilarStrings(a, b string) int {
+ 		af, bf = bf, af
+ 	}
+ 
++	if len(af) == 0 {
++		return 100
++	}
++
+ 	m1 := make(map[string]bool)
+ 	for i, x := range bf {
+ 		partition := partition(i, partitionSize)

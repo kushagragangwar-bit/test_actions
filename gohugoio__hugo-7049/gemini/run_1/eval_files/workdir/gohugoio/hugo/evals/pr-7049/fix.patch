@@ -1,0 +1,46 @@
+diff --git a/hugo-bin b/hugo-bin
+new file mode 100755
+index 000000000..3f6a32f14
+Binary files /dev/null and b/hugo-bin differ
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..6c4d28453 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -25,8 +25,6 @@ import (
+ 	"time"
+ 
+ 	"github.com/gohugoio/hugo/compare"
+-
+-	"github.com/gohugoio/hugo/common/hreflect"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,7 +50,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.
+@@ -169,7 +167,7 @@ func (s *Store) WriteMetrics(w io.Writer) {
+ 	sort.Sort(bySum(results))
+ 	for _, v := range results {
+ 		if s.calculateHints {
+-			fmt.Fprintf(w, "  %9d %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
++			fmt.Fprintf(w, "  %9d  %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
+ 		} else {
+ 			fmt.Fprintf(w, "  %13s  %12s  %12s  %5d  %s\n", v.sum, v.avg, v.max, v.count, v.key)
+ 		}
+@@ -238,6 +236,10 @@ func howSimilarStrings(a, b string) int {
+ 		af, bf = bf, af
+ 	}
+ 
++	if len(af) == 0 {
++		return 100
++	}
++
+ 	m1 := make(map[string]bool)
+ 	for i, x := range bf {
+ 		partition := partition(i, partitionSize)

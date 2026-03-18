@@ -1,0 +1,135 @@
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..894912fe5 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -26,7 +26,6 @@ import (
+ 
+ 	"github.com/gohugoio/hugo/compare"
+ 
+-	"github.com/gohugoio/hugo/common/hreflect"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,7 +51,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.
+@@ -169,7 +168,7 @@ func (s *Store) WriteMetrics(w io.Writer) {
+ 	sort.Sort(bySum(results))
+ 	for _, v := range results {
+ 		if s.calculateHints {
+-			fmt.Fprintf(w, "  %9d %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
++			fmt.Fprintf(w, "  %9d  %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
+ 		} else {
+ 			fmt.Fprintf(w, "  %13s  %12s  %12s  %5d  %s\n", v.sum, v.avg, v.max, v.count, v.key)
+ 		}
+@@ -229,6 +228,9 @@ func howSimilar(a, b interface{}) int {
+ // a number between 0-100 indicating how similar a and b are.
+ // 100 is when all words in a also exists in b.
+ func howSimilarStrings(a, b string) int {
++	if a == b {
++		return 100
++	}
+ 
+ 	// Give some weight to the word positions.
+ 	const partitionSize = 4
+@@ -238,6 +240,10 @@ func howSimilarStrings(a, b string) int {
+ 		af, bf = bf, af
+ 	}
+ 
++	if len(af) == 0 {
++		return 0
++	}
++
+ 	m1 := make(map[string]bool)
+ 	for i, x := range bf {
+ 		partition := partition(i, partitionSize)
+diff --git a/public/categories/index.xml b/public/categories/index.xml
+new file mode 100644
+index 000000000..ae8c7f8f7
+--- /dev/null
++++ b/public/categories/index.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8" standalone="yes"?>
++<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
++  <channel>
++    <title>Categories on </title>
++    <link>/categories/</link>
++    <description>Recent content in Categories on </description>
++    <generator>Hugo -- gohugo.io</generator>
++    
++	<atom:link href="/categories/index.xml" rel="self" type="application/rss+xml" />
++    
++    
++  </channel>
++</rss>
+\ No newline at end of file
+diff --git a/public/index.xml b/public/index.xml
+new file mode 100644
+index 000000000..b70aeed6e
+--- /dev/null
++++ b/public/index.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8" standalone="yes"?>
++<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
++  <channel>
++    <title></title>
++    <link>/</link>
++    <description>Recent content on </description>
++    <generator>Hugo -- gohugo.io</generator>
++    
++	<atom:link href="/index.xml" rel="self" type="application/rss+xml" />
++    
++    
++  </channel>
++</rss>
+\ No newline at end of file
+diff --git a/public/sitemap.xml b/public/sitemap.xml
+new file mode 100644
+index 000000000..95cee9f7c
+--- /dev/null
++++ b/public/sitemap.xml
+@@ -0,0 +1,17 @@
++<?xml version="1.0" encoding="utf-8" standalone="yes"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
++  xmlns:xhtml="http://www.w3.org/1999/xhtml">
++  
++  <url>
++    <loc>/</loc>
++  </url>
++  
++  <url>
++    <loc>/categories/</loc>
++  </url>
++  
++  <url>
++    <loc>/tags/</loc>
++  </url>
++  
++</urlset>
+\ No newline at end of file
+diff --git a/public/tags/index.xml b/public/tags/index.xml
+new file mode 100644
+index 000000000..43dbc43ba
+--- /dev/null
++++ b/public/tags/index.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8" standalone="yes"?>
++<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
++  <channel>
++    <title>Tags on </title>
++    <link>/tags/</link>
++    <description>Recent content in Tags on </description>
++    <generator>Hugo -- gohugo.io</generator>
++    
++	<atom:link href="/tags/index.xml" rel="self" type="application/rss+xml" />
++    
++    
++  </channel>
++</rss>
+\ No newline at end of file

@@ -1,0 +1,164 @@
+diff --git a/common/types/convert.go b/common/types/convert.go
+index b55330757..24e01c273 100644
+--- a/common/types/convert.go
++++ b/common/types/convert.go
+@@ -13,7 +13,11 @@
+ 
+ package types
+ 
+-import "github.com/spf13/cast"
++import (
++	"html/template"
++
++	"github.com/spf13/cast"
++)
+ 
+ // ToStringSlicePreserveString converts v to a string slice.
+ // If v is a string, it will be wrapped in a string slice.
+@@ -26,3 +30,39 @@ func ToStringSlicePreserveString(v interface{}) []string {
+ 	}
+ 	return cast.ToStringSlice(v)
+ }
++
++// TypeToString converts v to a string if it's a valid string type.
++// Note that this will not try to convert numeric values etc.,
++// use ToString for that.
++func TypeToString(v interface{}) (string, bool) {
++	switch s := v.(type) {
++	case string:
++		return s, true
++	case template.HTML:
++		return string(s), true
++	case template.CSS:
++		return string(s), true
++	case template.HTMLAttr:
++		return string(s), true
++	case template.JS:
++		return string(s), true
++	case template.JSStr:
++		return string(s), true
++	case template.URL:
++		return string(s), true
++	case template.Srcset:
++		return string(s), true
++	}
++
++	return "", false
++}
++
++// ToString converts v to a string.
++func ToString(v interface{}) string {
++	if s, ok := TypeToString(v); ok {
++		return s
++	}
++
++	return cast.ToString(v)
++
++}
+diff --git a/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_1024x512_fill_catmullrom_top_2.png b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_1024x512_fill_catmullrom_top_2.png
+new file mode 100644
+index 000000000..214dd317d
+Binary files /dev/null and b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_1024x512_fill_catmullrom_top_2.png differ
+diff --git a/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_640x0_resize_catmullrom_2.png b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_640x0_resize_catmullrom_2.png
+new file mode 100644
+index 000000000..ad418aa00
+Binary files /dev/null and b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_640x0_resize_catmullrom_2.png differ
+diff --git a/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_989c7e76c2c712f873e3f3bc40d31e81.png b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_989c7e76c2c712f873e3f3bc40d31e81.png
+new file mode 100644
+index 000000000..47468dc51
+Binary files /dev/null and b/docs/resources/_gen/images/showcase/aether/featured_hu087b0e6f87446792599d3d3535cdd374_275219_989c7e76c2c712f873e3f3bc40d31e81.png differ
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..d9e417c56 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -18,6 +18,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"math"
++	"reflect"
+ 	"sort"
+ 	"strconv"
+ 	"strings"
+@@ -26,7 +27,8 @@ import (
+ 
+ 	"github.com/gohugoio/hugo/compare"
+ 
+-	"github.com/gohugoio/hugo/common/hreflect"
++	"github.com/gohugoio/hugo/common/types"
++	"github.com/gohugoio/hugo/helpers"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,14 +54,14 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if types.IsNil(d.baseline) {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.
+ 		return d
+ 	}
+-
+-	d.simSum += howSimilar(v, d.baseline)
++	adder := howSimilar(v, d.baseline)
++	d.simSum += adder
+ 	d.count++
+ 
+ 	return d
+@@ -169,7 +171,7 @@ func (s *Store) WriteMetrics(w io.Writer) {
+ 	sort.Sort(bySum(results))
+ 	for _, v := range results {
+ 		if s.calculateHints {
+-			fmt.Fprintf(w, "  %9d %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
++			fmt.Fprintf(w, "  %9d  %13s  %12s  %12s  %5d  %s\n", v.cacheFactor, v.sum, v.avg, v.max, v.count, v.key)
+ 		} else {
+ 			fmt.Fprintf(w, "  %13s  %12s  %12s  %5d  %s\n", v.sum, v.avg, v.max, v.count, v.key)
+ 		}
+@@ -196,11 +198,19 @@ func (b bySum) Less(i, j int) bool { return b[i].sum > b[j].sum }
+ // howSimilar is a naive diff implementation that returns
+ // a number between 0-100 indicating how similar a and b are.
+ func howSimilar(a, b interface{}) int {
+-	// TODO(bep) object equality fast path, but remember that
+-	// we can get anytning in here.
++	t1, t2 := reflect.TypeOf(a), reflect.TypeOf(b)
++	if t1 != t2 {
++		return 0
++	}
++
++	if t1.Comparable() && t2.Comparable() {
++		if a == b {
++			return 100
++		}
++	}
+ 
+-	as, ok1 := a.(string)
+-	bs, ok2 := b.(string)
++	as, ok1 := types.TypeToString(a)
++	bs, ok2 := types.TypeToString(b)
+ 
+ 	if ok1 && ok2 {
+ 		return howSimilarStrings(as, bs)
+@@ -222,13 +232,21 @@ func howSimilar(a, b interface{}) int {
+ 		return 90
+ 	}
+ 
++	h1, h2 := helpers.HashString(a), helpers.HashString(b)
++	if h1 == h2 {
++		return 100
++	}
+ 	return 0
++
+ }
+ 
+ // howSimilar is a naive diff implementation that returns
+ // a number between 0-100 indicating how similar a and b are.
+ // 100 is when all words in a also exists in b.
+ func howSimilarStrings(a, b string) int {
++	if a == b {
++		return 100
++	}
+ 
+ 	// Give some weight to the word positions.
+ 	const partitionSize = 4

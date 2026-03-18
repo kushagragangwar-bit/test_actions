@@ -1,0 +1,45 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..9930ce9c8
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,26 @@
++# Hugo Repository Knowledge
++
++## Repository Overview
++Hugo is a static site generator written in Go.
++
++## Key Packages
++- `metrics/` - Template metrics tracking for `--templateMetrics` and `--templateMetricsHints` flags
++- `tpl/partials/` - Partial template execution with caching and metrics tracking
++- `tpl/tplimpl/` - Core template executor with timing metrics
++- `deps/` - Dependency injection, sets up metrics provider based on config flags
++- `hugolib/` - Main site building logic
++
++## Template Metrics Feature (`--templateMetrics` / `--templateMetricsHints`)
++- Controlled via `templateMetrics` and `templateMetricsHints` config flags
++- `metrics.NewProvider(calculateHints bool)` creates the metrics store
++- `MeasureSince` tracks template execution timing (called in `tpl/tplimpl/template.go`)
++- `TrackValue` tracks partial output values for cache-hint calculations (called in `tpl/partials/partials.go`)
++- `WriteMetrics` outputs the metrics table at end of build
++
++## Known Bug Fix (metrics/metrics.go)
++The `diff.add` method previously only set `baseline` when the value was falsy, causing the cache factor to always be 0 for templates rendering non-empty content (the common case). Fixed by adding `|| d.count == 0` so the first call always sets the baseline.
++
++## Test Notes
++- `TestJSEscaping` in `tpl/internal/go_templates/texttemplate` is a pre-existing failure unrelated to Hugo's code
++- Run `go test ./metrics/...` to test template metrics functionality
++- `go test` with `-vet=off` avoids a pre-existing vet panic in resources/page
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..53cefb90e 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -52,7 +52,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if !hreflect.IsTruthful(v) || d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.

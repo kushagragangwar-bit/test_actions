@@ -1,0 +1,165 @@
+{
+  "metric": "pass@8",
+  "k": 8,
+  "language": "go",
+  "model": "gemini",
+  "dataset": "gohugoio__hugo-7058",
+  "total_instances": 1,
+  "instances_with_any_pass": 0,
+  "pass_at_k": 0.0,
+  "timing_metrics": {
+    "total": {
+      "compute_time_seconds": 9300.0,
+      "api_time_seconds": 5689.51,
+      "tool_execution_time_seconds": 3610.49,
+      "api_calls": 868,
+      "accumulated_cost_usd": 19.1691,
+      "prompt_tokens": 43833985,
+      "completion_tokens": 182353
+    },
+    "average_per_run": {
+      "compute_time_seconds": 1162.5,
+      "api_time_seconds": 711.19,
+      "tool_execution_time_seconds": 451.31,
+      "accumulated_cost_usd": 2.3961
+    },
+    "time_distribution": {
+      "api_time_percent": 61.2,
+      "tool_execution_percent": 38.8
+    }
+  },
+  "per_run": [
+    {
+      "run": 1,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 642.1,
+      "api_time_seconds": 499.94,
+      "tool_execution_time_seconds": 142.16,
+      "api_calls": 73,
+      "accumulated_cost": 1.118,
+      "prompt_tokens": 1957537,
+      "completion_tokens": 14487,
+      "cache_read_tokens": 1650520,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 2,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1062.2,
+      "api_time_seconds": 683.52,
+      "tool_execution_time_seconds": 378.68,
+      "api_calls": 112,
+      "accumulated_cost": 2.6408,
+      "prompt_tokens": 6150365,
+      "completion_tokens": 19766,
+      "cache_read_tokens": 5498395,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 3,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1457.4,
+      "api_time_seconds": 821.88,
+      "tool_execution_time_seconds": 635.52,
+      "api_calls": 124,
+      "accumulated_cost": 2.7871,
+      "prompt_tokens": 7720071,
+      "completion_tokens": 28589,
+      "cache_read_tokens": 7220050,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 4,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 584.1,
+      "api_time_seconds": 461.98,
+      "tool_execution_time_seconds": 122.12,
+      "api_calls": 73,
+      "accumulated_cost": 1.8587,
+      "prompt_tokens": 3757019,
+      "completion_tokens": 14893,
+      "cache_read_tokens": 3241150,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 5,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1149.5,
+      "api_time_seconds": 726.59,
+      "tool_execution_time_seconds": 422.91,
+      "api_calls": 107,
+      "accumulated_cost": 2.8724,
+      "prompt_tokens": 5140249,
+      "completion_tokens": 25690,
+      "cache_read_tokens": 4286904,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 6,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 2085.5,
+      "api_time_seconds": 1062.28,
+      "tool_execution_time_seconds": 1023.22,
+      "api_calls": 166,
+      "accumulated_cost": 3.2639,
+      "prompt_tokens": 9131572,
+      "completion_tokens": 34208,
+      "cache_read_tokens": 8560991,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 7,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1114.5,
+      "api_time_seconds": 720.86,
+      "tool_execution_time_seconds": 393.64,
+      "api_calls": 109,
+      "accumulated_cost": 1.6332,
+      "prompt_tokens": 3747897,
+      "completion_tokens": 18346,
+      "cache_read_tokens": 3379305,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 8,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1204.7,
+      "api_time_seconds": 712.46,
+      "tool_execution_time_seconds": 492.24,
+      "api_calls": 104,
+      "accumulated_cost": 2.995,
+      "prompt_tokens": 6229275,
+      "completion_tokens": 26374,
+      "cache_read_tokens": 5433367,
+      "cache_write_tokens": 0
+    }
+  ],
+  "per_instance": {
+    "gohugoio/hugo:pr-7058": {
+      "run_1": "FAIL",
+      "run_2": "FAIL",
+      "run_3": "FAIL",
+      "run_4": "FAIL",
+      "run_5": "FAIL",
+      "run_6": "FAIL",
+      "run_7": "FAIL",
+      "run_8": "FAIL"
+    }
+  }
+}

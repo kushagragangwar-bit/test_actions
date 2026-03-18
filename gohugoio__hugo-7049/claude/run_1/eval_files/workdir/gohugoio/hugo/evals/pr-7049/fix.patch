@@ -1,0 +1,169 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..2c9e55768
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,28 @@
++# Hugo Repository - Agent Notes
++
++## Project Overview
++Hugo is a static site generator written in Go. The main codebase is in /workspace/hugo.
++
++## Key Packages
++- `metrics/` - Template performance metrics tracking (used by `--templateMetrics` and `--templateMetricsHints`)
++- `tpl/partials/` - Template partial execution; calls `TrackValue` for metrics hints
++- `common/types/` - Type utilities including `TypeToString` for template type conversions
++- `helpers/` - General utilities including `HashString` for hash-based comparisons
++
++## Known Issues and Fixes
++
++### --templateMetricsHints showing 0 for all templates (Issue #7048)
++**Root cause**: `diff.add()` in `metrics/metrics.go` had a wrong condition `!hreflect.IsTruthful(v)` for setting the baseline. Since most template values are "truthful" (non-nil, non-empty), the baseline was never set, and `howSimilar(v, nil)` always returned 0.
++
++**Fix**: Changed condition to `d.count == 0` to correctly initialize the baseline on first call.
++
++Also improved `howSimilar` to handle:
++- Type-checking via `reflect.TypeOf` (mismatched types return 0)
++- Fast path for comparable types via `==` operator
++- `template.HTML` and other HTML template types via `types.TypeToString`
++- Hash-based comparison as fallback for non-comparable types (maps, etc.)
++
++## Testing
++- Run `go test ./metrics/...` to test metrics package
++- The go vet tool (from a different go installation) may panic during test runs - this is unrelated to the codebase itself
++- Pre-existing failing test: `TestJSEscaping` in `tpl/internal/go_templates/texttemplate`
+diff --git a/common/types/convert.go b/common/types/convert.go
+index b55330757..e4de94c0e 100644
+--- a/common/types/convert.go
++++ b/common/types/convert.go
+@@ -13,7 +13,11 @@
+ 
+ package types
+ 
+-import "github.com/spf13/cast"
++import (
++	"html/template"
++
++	"github.com/spf13/cast"
++)
+ 
+ // ToStringSlicePreserveString converts v to a string slice.
+ // If v is a string, it will be wrapped in a string slice.
+@@ -26,3 +30,38 @@ func ToStringSlicePreserveString(v interface{}) []string {
+ 	}
+ 	return cast.ToStringSlice(v)
+ }
++
++// TypeToString converts v to a string if it's a valid string type.
++// Note that this will not try to convert numeric values etc.,
++// use ToString for that.
++func TypeToString(v interface{}) (string, bool) {
++	switch s := v.(type) {
++	case string:
++		return s, true
++	case template.HTML:
++		return string(s), true
++	case template.CSS:
++		return string(s), true
++	case template.HTMLAttr:
++		return string(s), true
++	case template.JS:
++		return string(s), true
++	case template.JSStr:
++		return string(s), true
++	case template.URL:
++		return string(s), true
++	case template.Srcset:
++		return string(s), true
++	}
++
++	return "", false
++}
++
++// ToString converts v to a string.
++func ToString(v interface{}) string {
++	if s, ok := TypeToString(v); ok {
++		return s
++	}
++
++	return cast.ToString(v)
++}
+diff --git a/metrics/metrics.go b/metrics/metrics.go
+index 329981202..101d2eb29 100644
+--- a/metrics/metrics.go
++++ b/metrics/metrics.go
+@@ -18,15 +18,16 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"math"
++	"reflect"
+ 	"sort"
+ 	"strconv"
+ 	"strings"
+ 	"sync"
+ 	"time"
+ 
++	"github.com/gohugoio/hugo/common/types"
+ 	"github.com/gohugoio/hugo/compare"
+-
+-	"github.com/gohugoio/hugo/common/hreflect"
++	"github.com/gohugoio/hugo/helpers"
+ )
+ 
+ // The Provider interface defines an interface for measuring metrics.
+@@ -52,7 +53,7 @@ type diff struct {
+ }
+ 
+ func (d *diff) add(v interface{}) *diff {
+-	if !hreflect.IsTruthful(v) {
++	if d.count == 0 {
+ 		d.baseline = v
+ 		d.count = 1
+ 		d.simSum = 100 // If we get only one it is very cache friendly.
+@@ -196,11 +197,19 @@ func (b bySum) Less(i, j int) bool { return b[i].sum > b[j].sum }
+ // howSimilar is a naive diff implementation that returns
+ // a number between 0-100 indicating how similar a and b are.
+ func howSimilar(a, b interface{}) int {
+-	// TODO(bep) object equality fast path, but remember that
+-	// we can get anytning in here.
++	t1, t2 := reflect.TypeOf(a), reflect.TypeOf(b)
++	if t1 != t2 {
++		return 0
++	}
++
++	if t1 != nil && t1.Comparable() {
++		if a == b {
++			return 100
++		}
++	}
+ 
+-	as, ok1 := a.(string)
+-	bs, ok2 := b.(string)
++	as, ok1 := types.TypeToString(a)
++	bs, ok2 := types.TypeToString(b)
+ 
+ 	if ok1 && ok2 {
+ 		return howSimilarStrings(as, bs)
+@@ -222,13 +231,21 @@ func howSimilar(a, b interface{}) int {
+ 		return 90
+ 	}
+ 
++	h1, h2 := helpers.HashString(a), helpers.HashString(b)
++	if h1 == h2 {
++		return 100
++	}
++
+ 	return 0
+ }
+ 
+-// howSimilar is a naive diff implementation that returns
++// howSimilarStrings is a naive diff implementation that returns
+ // a number between 0-100 indicating how similar a and b are.
+ // 100 is when all words in a also exists in b.
+ func howSimilarStrings(a, b string) int {
++	if a == b {
++		return 100
++	}
+ 
+ 	// Give some weight to the word positions.
+ 	const partitionSize = 4
