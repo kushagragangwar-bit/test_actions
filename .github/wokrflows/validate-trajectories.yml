@@ -1,0 +1,66 @@
+name: Validate SWE-bench Trajectories
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'Week*/trajectories/SWE/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # ── Step 1: Minimal clone (no file checkout yet) ──
+      - name: Clone repo (no checkout)
+        run: |
+          git clone --no-checkout --depth=2 --filter=blob:none \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo
+          cd repo
+          git sparse-checkout init --cone
+
+      # ── Step 2: Find changed SWE trajectory files ──
+      - name: Get changed files
+        id: changed
+        working-directory: repo
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=ACM HEAD~1 HEAD -- 'Week*/trajectories/SWE/' 2>/dev/null || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No SWE trajectory files changed."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "$CHANGED" > /tmp/changed_files.txt
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          # Extract unique run dirs and their parent model dirs for sparse checkout
+          # e.g. Week1/trajectories/SWE/task_id/claude/run_3 → checkout that + parent
+          SPARSE_PATHS=".github/scripts"
+          for f in $CHANGED; do
+            # Get the run directory (6 levels deep)
+            RUN_DIR=$(echo "$f" | cut -d'/' -f1-6)
+            # Get the model directory (5 levels deep, for pass_at_8_summary.json)
+            MODEL_DIR=$(echo "$f" | cut -d'/' -f1-5)
+            SPARSE_PATHS="$SPARSE_PATHS $RUN_DIR $MODEL_DIR"
+          done
+
+          # Deduplicate
+          SPARSE_PATHS=$(echo "$SPARSE_PATHS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          echo "Sparse checkout paths: $SPARSE_PATHS"
+          echo "sparse_paths=$SPARSE_PATHS" >> "$GITHUB_OUTPUT"
+
+      # ── Step 3: Sparse checkout only the affected directories ──
+      - name: Sparse checkout affected paths
+        if: steps.changed.outputs.has_changes == 'true'
+        working-directory: repo
+        run: |
+          git sparse-checkout set ${{ steps.changed.outputs.sparse_paths }}
+          git checkout HEAD
+
+      # ── Step 4: Run validation (Python 3 is pre-installed on ubuntu-latest) ──
+      - name: Run validation
+        if: steps.changed.outputs.has_changes == 'true'
+        working-directory: repo
+        run: python3 .github/scripts/validate_trajectories.py /tmp/changed_files.txt
