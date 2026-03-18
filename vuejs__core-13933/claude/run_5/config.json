@@ -1,0 +1,25 @@
+{
+    "mode": "evaluation",
+    "workdir": "./jaeger-finals/benchmarks/eval_outputs_ts3_claude/vuejs__core-13933/claude/run_5/eval_files/workdir",
+    "patch_files": [
+        "./jaeger-finals/benchmarks/eval_outputs_ts3_claude/vuejs__core-13933/claude/run_5/output_converted.jsonl"
+    ],
+    "dataset_files": [
+        "./jaeger-finals/benchmarks/benchmarks/multiswebench/data/vuejs__core-13933.jsonl"
+    ],
+    "force_build": true,
+    "output_dir": "./jaeger-finals/benchmarks/eval_outputs_ts3_claude/vuejs__core-13933/claude/run_5/eval_files/dataset",
+    "specifics": [],
+    "skips": [],
+    "repo_dir": "./jaeger-finals/benchmarks/eval_outputs_ts3_claude/vuejs__core-13933/claude/run_5/eval_files/repos",
+    "need_clone": true,
+    "global_env": [],
+    "clear_env": true,
+    "stop_on_error": false,
+    "max_workers": 1,
+    "max_workers_build_image": 1,
+    "max_workers_run_instance": 1,
+    "log_dir": "./jaeger-finals/benchmarks/eval_outputs_ts3_claude/vuejs__core-13933/claude/run_5/eval_files/logs",
+    "log_level": "DEBUG",
+    "fix_patch_run_cmd": "bash -c \"apt-get update ; apt-get install -y patch ; sed -i 's@git apply.*@patch --batch --fuzz=5 -p1 -i /home/test.patch;patch --batch --fuzz=5 -p1 -i /home/fix.patch@g' /home/fix-run.sh ; chmod +x /home/*.sh ; /home/fix-run.sh\""
+}

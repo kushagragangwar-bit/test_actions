@@ -1,0 +1,165 @@
+{
+  "metric": "pass@8",
+  "k": 8,
+  "language": "ts",
+  "model": "gemini",
+  "dataset": "vuejs__core-13933",
+  "total_instances": 1,
+  "instances_with_any_pass": 0,
+  "pass_at_k": 0.0,
+  "timing_metrics": {
+    "total": {
+      "compute_time_seconds": 15570.9,
+      "api_time_seconds": 7351.86,
+      "tool_execution_time_seconds": 8219.04,
+      "api_calls": 1533,
+      "accumulated_cost_usd": 41.8555,
+      "prompt_tokens": 107667649,
+      "completion_tokens": 202832
+    },
+    "average_per_run": {
+      "compute_time_seconds": 1946.36,
+      "api_time_seconds": 918.98,
+      "tool_execution_time_seconds": 1027.38,
+      "accumulated_cost_usd": 5.2319
+    },
+    "time_distribution": {
+      "api_time_percent": 47.2,
+      "tool_execution_percent": 52.8
+    }
+  },
+  "per_run": [
+    {
+      "run": 1,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 928.6,
+      "api_time_seconds": 539.07,
+      "tool_execution_time_seconds": 389.53,
+      "api_calls": 119,
+      "accumulated_cost": 2.4594,
+      "prompt_tokens": 6320127,
+      "completion_tokens": 11221,
+      "cache_read_tokens": 5730846,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 2,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 401.5,
+      "api_time_seconds": 282.67,
+      "tool_execution_time_seconds": 118.83,
+      "api_calls": 48,
+      "accumulated_cost": 0.3746,
+      "prompt_tokens": 734464,
+      "completion_tokens": 3049,
+      "cache_read_tokens": 628273,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 3,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 2880.0,
+      "api_time_seconds": 1009.67,
+      "tool_execution_time_seconds": 1870.33,
+      "api_calls": 195,
+      "accumulated_cost": 7.1015,
+      "prompt_tokens": 14362355,
+      "completion_tokens": 44505,
+      "cache_read_tokens": 12309605,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 4,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 2436.5,
+      "api_time_seconds": 1209.99,
+      "tool_execution_time_seconds": 1226.51,
+      "api_calls": 269,
+      "accumulated_cost": 7.0841,
+      "prompt_tokens": 20325845,
+      "completion_tokens": 20104,
+      "cache_read_tokens": 18782679,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 5,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 3525.1,
+      "api_time_seconds": 1409.93,
+      "tool_execution_time_seconds": 2115.17,
+      "api_calls": 281,
+      "accumulated_cost": 7.8695,
+      "prompt_tokens": 19220658,
+      "completion_tokens": 44083,
+      "cache_read_tokens": 17278214,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 6,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 2407.2,
+      "api_time_seconds": 1423.45,
+      "tool_execution_time_seconds": 983.75,
+      "api_calls": 275,
+      "accumulated_cost": 8.2442,
+      "prompt_tokens": 24874400,
+      "completion_tokens": 41100,
+      "cache_read_tokens": 23332110,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 7,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1287.4,
+      "api_time_seconds": 729.94,
+      "tool_execution_time_seconds": 557.46,
+      "api_calls": 162,
+      "accumulated_cost": 3.2942,
+      "prompt_tokens": 8644040,
+      "completion_tokens": 24858,
+      "cache_read_tokens": 7940078,
+      "cache_write_tokens": 0
+    },
+    {
+      "run": 8,
+      "status": "ok",
+      "resolved": 0,
+      "total": 1,
+      "compute_time_seconds": 1704.6,
+      "api_time_seconds": 747.14,
+      "tool_execution_time_seconds": 957.46,
+      "api_calls": 184,
+      "accumulated_cost": 5.428,
+      "prompt_tokens": 13185760,
+      "completion_tokens": 13912,
+      "cache_read_tokens": 11728021,
+      "cache_write_tokens": 0
+    }
+  ],
+  "per_instance": {
+    "vuejs/core:pr-13933": {
+      "run_1": "FAIL",
+      "run_2": "FAIL",
+      "run_3": "FAIL",
+      "run_4": "FAIL",
+      "run_5": "FAIL",
+      "run_6": "FAIL",
+      "run_7": "FAIL",
+      "run_8": "FAIL"
+    }
+  }
+}

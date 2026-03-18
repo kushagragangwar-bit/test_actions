@@ -1,0 +1,205 @@
+diff --git a/packages/compiler-core/__tests__/transforms/vBind.spec.ts b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+index 2221d926e..9fcebf9c8 100644
+--- a/packages/compiler-core/__tests__/transforms/vBind.spec.ts
++++ b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+@@ -428,4 +428,13 @@ describe('compiler: transform v-bind', () => {
+       },
+     })
+   })
++
++  test('error on invalid argument for same-name shorthand (browser)', () => {
++    const onError = vi.fn()
++    // simulate browser behavior parsing dropping value as `<div v-bind:[arg]="">`
++    parseWithVBind(`<div v-bind:[arg]="" />`, { onError })
++    expect(onError.mock.calls[0][0]).toMatchObject({
++      code: ErrorCodes.X_V_BIND_NO_EXPRESSION,
++    })
++  })
+ })
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..6e42967e4 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -12,14 +12,24 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+   if (node.type === NodeTypes.ELEMENT) {
+     for (const prop of node.props) {
+       // same-name shorthand - :arg is expanded to :arg="arg"
++      // in-DOM templates will be parsed into :arg="" by the browser
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        prop.arg &&
++        prop.arg.type === NodeTypes.SIMPLE_EXPRESSION &&
++        prop.arg.isStatic &&
++        (!prop.exp || (prop.exp.type === NodeTypes.SIMPLE_EXPRESSION && !prop.exp.content.trim() && __BROWSER__))
+       ) {
+-        const arg = prop.arg!
+-        if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+-          // only simple expression is allowed for same-name shorthand
++        const arg = prop.arg
++        const propName = camelize(arg.content)
++        if (
++          validFirstIdentCharRE.test(propName[0]) ||
++          // allow hyphen first char for https://github.com/vuejs/language-tools/pull/3424
++          propName[0] === '-'
++        ) {
++          prop.exp = createSimpleExpression(propName, false, arg.loc)
++        } else if (!prop.exp) {
+           context.onError(
+             createCompilerError(
+               ErrorCodes.X_V_BIND_INVALID_SAME_NAME_ARGUMENT,
+@@ -27,14 +37,29 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+             ),
+           )
+           prop.exp = createSimpleExpression('', true, arg.loc)
+-        } else {
+-          const propName = camelize((arg as SimpleExpressionNode).content)
+-          if (
+-            validFirstIdentCharRE.test(propName[0]) ||
+-            // allow hyphen first char for https://github.com/vuejs/language-tools/pull/3424
+-            propName[0] === '-'
+-          ) {
+-            prop.exp = createSimpleExpression(propName, false, arg.loc)
++        } else if (prop.exp) {
++          prop.exp.content = ''
++        }
++      } else if (
++        prop.type === NodeTypes.DIRECTIVE &&
++        prop.name === 'bind' &&
++        (!prop.exp || (prop.exp.type === NodeTypes.SIMPLE_EXPRESSION && !prop.exp.content.trim() && __BROWSER__))
++      ) {
++        // Fallback for cases where exp is genuinely missing or blank but arg is not a simple static expression
++        // i.e. v-bind:[invalid] or v-bind:[invalid]=""
++        // Note: prop.arg can be undefined if it's v-bind="" which is handled differently
++        if (prop.arg && (prop.arg.type !== NodeTypes.SIMPLE_EXPRESSION || !prop.arg.isStatic)) {
++          if (!prop.exp) {
++            // only simple expression is allowed for same-name shorthand
++            context.onError(
++              createCompilerError(
++                ErrorCodes.X_V_BIND_INVALID_SAME_NAME_ARGUMENT,
++                prop.arg.loc || prop.loc,
++              ),
++            )
++            prop.exp = createSimpleExpression('', true, prop.arg.loc || prop.loc)
++          } else if (prop.exp) {
++            prop.exp = undefined
+           }
+         }
+       }
+diff --git a/packages/compiler-core/src/transforms/vBind.ts b/packages/compiler-core/src/transforms/vBind.ts
+index c32df9e36..3a743627d 100644
+--- a/packages/compiler-core/src/transforms/vBind.ts
++++ b/packages/compiler-core/src/transforms/vBind.ts
+@@ -18,7 +18,7 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+ 
+   let { exp } = dir
+ 
+-  // handle empty expression
++    // handle empty expression
+   if (exp && exp.type === NodeTypes.SIMPLE_EXPRESSION && !exp.content.trim()) {
+     if (!__BROWSER__) {
+       // #10280 only error against empty expression in non-browser build
+@@ -68,7 +68,7 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+   }
+ 
+   return {
+-    props: [createObjectProperty(arg, exp!)],
++    props: [createObjectProperty(arg, exp || createSimpleExpression('', true, loc))],
+   }
+ }
+ 
+diff --git a/packages/compiler-dom/repro.html b/packages/compiler-dom/repro.html
+new file mode 100644
+index 000000000..2360f053b
+--- /dev/null
++++ b/packages/compiler-dom/repro.html
+@@ -0,0 +1,14 @@
++<!DOCTYPE html>
++<html>
++<body>
++<div id="app">
++  <div :foo></div>
++</div>
++<script src="../../dist/vue.global.js"></script>
++<script>
++  Vue.createApp({
++    data() { return { foo: "orz" } }
++  }).mount('#app')
++</script>
++</body>
++</html>
+diff --git a/repro-browser.mjs b/repro-browser.mjs
+new file mode 100644
+index 000000000..98f555bb5
+--- /dev/null
++++ b/repro-browser.mjs
+@@ -0,0 +1,8 @@
++import { compile } from './packages/compiler-dom/dist/compiler-dom.esm-browser.js';
++try {
++  const result = compile('<div :foo></div>');
++  console.log('SUCCESS');
++} catch (e) {
++  console.error('ERROR');
++  console.error(e.stack);
++}
+diff --git a/repro-browser2.mjs b/repro-browser2.mjs
+new file mode 100644
+index 000000000..89c628407
+--- /dev/null
++++ b/repro-browser2.mjs
+@@ -0,0 +1,8 @@
++import { compile } from './packages/compiler-dom/dist/compiler-dom.esm-browser.js';
++try {
++  const result = compile('<div :foo></div>');
++  console.log(result.code);
++} catch (e) {
++  console.error('ERROR');
++  console.error(e.stack);
++}
+diff --git a/repro-browser3.mjs b/repro-browser3.mjs
+new file mode 100644
+index 000000000..e88ac2ff2
+--- /dev/null
++++ b/repro-browser3.mjs
+@@ -0,0 +1,13 @@
++import { compile } from './packages/compiler-dom/dist/compiler-dom.esm-browser.js';
++try {
++  const result = compile('<div :foo=""></div>');
++  console.log(result.code);
++  const result2 = compile('<div v-bind:[invalid]="foo"></div>');
++  console.log(result2.code);
++  const result3 = compile('<div v-bind:[invalid]=""></div>');
++  console.log(result3.code);
++} catch (e) {
++  console.error('ERROR');
++  console.error(e.stack);
++}
++
+diff --git a/repro.js b/repro.js
+new file mode 100644
+index 000000000..2e42de3eb
+--- /dev/null
++++ b/repro.js
+@@ -0,0 +1,7 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++try {
++  const result = compile('<div :foo></div>');
++  console.log('SUCCESS:', result.code);
++} catch (e) {
++  console.log('ERROR:', e.message, e.stack);
++}
+diff --git a/repro.mjs b/repro.mjs
+new file mode 100644
+index 000000000..0cdf7ba4c
+--- /dev/null
++++ b/repro.mjs
+@@ -0,0 +1,8 @@
++import { compile } from './packages/compiler-dom/dist/compiler-dom.esm-bundler.js';
++try {
++  const result = compile('<div :foo></div>');
++  console.log('SUCCESS');
++} catch (e) {
++  console.error('ERROR');
++  console.error(e.stack);
++}

@@ -1,0 +1,32 @@
+diff --git a/packages/compiler-core/__tests__/transforms/vBind.spec.ts b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+index 2221d926e52f5784c9e3fcdd92f043d9806d6abe..ff21351d05da42fabdd3a6af11cfa38437d67538 100644
+--- a/packages/compiler-core/__tests__/transforms/vBind.spec.ts
++++ b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+@@ -112,6 +112,27 @@ describe('compiler: transform v-bind', () => {
+     })
+   })
+ 
++  test('no expression (shorthand) in-DOM templates', () => {
++    try {
++      __BROWSER__ = true
++      // :id in in-DOM templates will be parsed into :id="" by browser
++      const node = parseWithVBind(`<div :id="" />`)
++      const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++      expect(props.properties[0]).toMatchObject({
++        key: {
++          content: `id`,
++          isStatic: true,
++        },
++        value: {
++          content: `id`,
++          isStatic: false,
++        },
++      })
++    } finally {
++      __BROWSER__ = false
++    }
++  })
++
+   test('dynamic arg', () => {
+     const node = parseWithVBind(`<div v-bind:[id]="id"/>`)
+     const props = (node.codegenNode as VNodeCall).props as CallExpression

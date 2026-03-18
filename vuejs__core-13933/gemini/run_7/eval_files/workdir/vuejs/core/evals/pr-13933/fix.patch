@@ -1,0 +1,273 @@
+diff --git a/full-test-global.cjs b/full-test-global.cjs
+new file mode 100644
+index 000000000..6b31d632f
+--- /dev/null
++++ b/full-test-global.cjs
+@@ -0,0 +1,38 @@
++const { JSDOM, VirtualConsole } = require("jsdom");
++const virtualConsole = new VirtualConsole();
++virtualConsole.on("log", (...args) => console.log(...args));
++virtualConsole.on("error", (...args) => console.error(...args));
++virtualConsole.on("warn", (...args) => console.warn(...args));
++
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <body>
++    <div id="app">
++      <div :type>Fail #1</div>
++      <div v-bind:type>Fail #2</div>
++      <div :type="type">Pass #1</div>
++      <div v-bind:type="type">Pass #2</div>
++    </div>
++  </body>
++</html>
++`, { runScripts: "dangerously", virtualConsole });
++
++global.window = dom.window;
++global.document = dom.window.document;
++
++const VueScript = dom.window.document.createElement('script');
++const fs = require('fs')
++VueScript.textContent = fs.readFileSync('./packages/vue/dist/vue.global.js', 'utf8')
++dom.window.document.head.appendChild(VueScript);
++
++const script = dom.window.document.createElement('script');
++script.textContent = `
++  const app = Vue.createApp({
++    data() { return { type: 'test' } }
++  })
++  app.mount('#app')
++  console.log(document.getElementById('app').innerHTML)
++`;
++dom.window.document.head.appendChild(script);
++
+diff --git a/full-test.cjs b/full-test.cjs
+new file mode 100644
+index 000000000..509eeefb6
+--- /dev/null
++++ b/full-test.cjs
+@@ -0,0 +1,37 @@
++const { JSDOM } = require("jsdom");
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <body>
++    <div id="app">
++      <div :type>Fail #1</div>
++      <div v-bind:type>Fail #2</div>
++      <div :type="type">Pass #1</div>
++      <div v-bind:type="type">Pass #2</div>
++    </div>
++  </body>
++</html>
++`);
++
++global.window = dom.window;
++global.document = dom.window.document;
++global.SVGElement = dom.window.SVGElement;
++global.Element = dom.window.Element;
++global.MathMLElement = dom.window.MathMLElement;
++global.__DEV__ = true;
++global.__VUE_OPTIONS_API__ = true;
++global.__VUE_PROD_DEVTOOLS__ = false;
++
++const Vue = require('./packages/vue/dist/vue.cjs.js')
++const app = Vue.createApp({
++  data() {
++    return { type: 'test' }
++  }
++})
++try {
++  app.mount('#app')
++  console.log(document.getElementById('app').innerHTML)
++} catch (e) {
++  console.error("FAIL:", e)
++}
++
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..0d2c342d1 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -15,7 +15,11 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        prop.arg &&
++        (!prop.exp ||
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+diff --git a/parse-global-ast.cjs b/parse-global-ast.cjs
+new file mode 100644
+index 000000000..52ef02110
+--- /dev/null
++++ b/parse-global-ast.cjs
+@@ -0,0 +1,10 @@
++const { parse } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++const v = '\n      <div :type="">Fail #1</div>\n    '
++console.log('val', JSON.stringify(v))
++const result = parse(v, { onError: console.error })
++
++function inspect(node) {
++  return require('util').inspect(node, { depth: null })
++}
++
++console.log(inspect(result.children));
+diff --git a/parse-global-html.cjs b/parse-global-html.cjs
+new file mode 100644
+index 000000000..3cdf7d8d5
+--- /dev/null
++++ b/parse-global-html.cjs
+@@ -0,0 +1,9 @@
++const VueCompilerDOM = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++
++const ast1 = VueCompilerDOM.compile('<div :type></div>').ast.children[0].props[0]
++
++function inspect(node) {
++  return require('util').inspect(node, { depth: null })
++}
++
++console.log('short:', inspect(ast1))
+diff --git a/parse-global.cjs b/parse-global.cjs
+new file mode 100644
+index 000000000..60d1fd151
+--- /dev/null
++++ b/parse-global.cjs
+@@ -0,0 +1,16 @@
++const { JSDOM } = require("jsdom");
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <body>
++    <div id="app">
++      <div :type>Fail #1</div>
++    </div>
++  </body>
++</html>
++`);
++
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++console.log(dom.window.document.getElementById('app').innerHTML)
++const result = compile(dom.window.document.getElementById('app').innerHTML, { onError: console.error })
++console.log(result.code);
+diff --git a/parse.cjs b/parse.cjs
+new file mode 100644
+index 000000000..2463f8157
+--- /dev/null
++++ b/parse.cjs
+@@ -0,0 +1,11 @@
++const DOM = require('./packages/compiler-dom/dist/compiler-dom.cjs.js')
++try {
++  DOM.compile('<div v-bind></div>')
++} catch (e) {
++  console.log('CRASH1:', e.message)
++}
++try {
++  DOM.compile('<div v-bind=""></div>')
++} catch (e) {
++  console.log('CRASH2:', e.message)
++}
+diff --git a/parse2.cjs b/parse2.cjs
+new file mode 100644
+index 000000000..90e811b11
+--- /dev/null
++++ b/parse2.cjs
+@@ -0,0 +1,4 @@
++const vue = require('./packages/vue/dist/vue.cjs.js')
++vue.compile('<div v-bind:arg="" />', { onError: e => console.log('ERROR:', e.message) })
++vue.compile('<div v-bind="" />', { onError: e => console.log('ERROR:', e.message) })
++vue.compile('<div :="" />', { onError: e => console.log('ERROR:', e.message) })
+diff --git a/test-html.cjs b/test-html.cjs
+new file mode 100644
+index 000000000..da6213afb
+--- /dev/null
++++ b/test-html.cjs
+@@ -0,0 +1,7 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++try {
++  const result = compile('<div :type></div>', { onError: console.error });
++  console.log(result.code);
++} catch (e) {
++  console.error(e);
++}
+diff --git a/test-jdsom.cjs b/test-jdsom.cjs
+new file mode 100644
+index 000000000..d0e94e93a
+--- /dev/null
++++ b/test-jdsom.cjs
+@@ -0,0 +1,15 @@
++const { JSDOM } = require("jsdom");
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <body>
++    <div id="app">
++      <div :type>Fail #1</div>
++    </div>
++  </body>
++</html>
++`);
++
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++const result = compile(dom.window.document.getElementById('app').innerHTML)
++console.log(result.code);
+diff --git a/test-jdsom.js b/test-jdsom.js
+new file mode 100644
+index 000000000..d717d048d
+--- /dev/null
++++ b/test-jdsom.js
+@@ -0,0 +1,31 @@
++const { JSDOM } = require("jsdom");
++const dom = new JSDOM(\`
++<!DOCTYPE html>
++<html>
++  <body>
++    <div id="app">
++      <div :type>Fail #1</div>
++      <div v-bind:type>Fail #2</div>
++      <div :type="type">Pass #1</div>
++      <div v-bind:type="type">Pass #2</div>
++    </div>
++  </body>
++</html>
++\`);
++
++global.window = dom.window;
++global.document = dom.window.document;
++
++const Vue = require('./packages/vue/dist/vue.cjs.js')
++const app = Vue.createApp({
++  data() {
++    return { type: 'test' }
++  }
++})
++try {
++  app.mount('#app')
++  console.log(document.getElementById('app').innerHTML)
++} catch (e) {
++  console.error("FAIL:", e)
++}
++
+diff --git a/test-sfc-shorthand.cjs b/test-sfc-shorthand.cjs
+new file mode 100644
+index 000000000..74f96b8db
+--- /dev/null
++++ b/test-sfc-shorthand.cjs
+@@ -0,0 +1,3 @@
++const dom = require('./packages/compiler-dom/dist/compiler-dom.cjs.js')
++const ast1 = dom.baseParse('<div :type></div>').children[0].props[0]
++console.log(ast1.exp)
+diff --git a/test-sfc.js b/test-sfc.js
+new file mode 100644
+index 000000000..c4b641e37
+--- /dev/null
++++ b/test-sfc.js
+@@ -0,0 +1,3 @@
++import { compileTemplate } from './packages/compiler-sfc/dist/compiler-sfc.esm-browser.js'
++const result = compileTemplate({ source: '<div :type></div>', id: 'test' })
++console.log(result.code)

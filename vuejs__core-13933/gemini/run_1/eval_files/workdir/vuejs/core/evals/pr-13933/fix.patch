@@ -1,0 +1,223 @@
+diff --git a/packages/compiler-core/__tests__/transforms/vBind.spec.ts b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+index 2221d926e..3da8ea036 100644
+--- a/packages/compiler-core/__tests__/transforms/vBind.spec.ts
++++ b/packages/compiler-core/__tests__/transforms/vBind.spec.ts
+@@ -428,4 +428,28 @@ describe('compiler: transform v-bind', () => {
+       },
+     })
+   })
++
++  test('same-name shorthand without expression in DOM template', () => {
++    // In actual usage, this is parsed by browser which turns `<div :arg>` into `<div :arg="">`
++    // but without our fix, an empty simple expression could result in undefined `exp` and crash
++    // during compile time type checks for in-DOM compilation
++    
++    ;(global as any).__BROWSER__ = true
++    const ast = parse('<div :arg=""></div>', {
++      decodeEntities: (text) => text,
++    })
++    transform(ast, {
++      nodeTransforms: [transformVBindShorthand, transformElement],
++      directiveTransforms: {
++        bind: transformBind,
++      },
++      onError: () => {} // ignore the expected error
++    })
++    ;(global as any).__BROWSER__ = false
++    
++    // It should compile correctly and not throw
++    const codegenNode = (ast.children[0] as any).codegenNode
++    expect(codegenNode.props.properties[0].key.content).toBe('arg')
++    expect(codegenNode.props.properties[0].value.content).toBe('')
++  })
+ })
+diff --git a/packages/compiler-core/__tests__/transforms/vBind.spec.ts.patch b/packages/compiler-core/__tests__/transforms/vBind.spec.ts.patch
+new file mode 100644
+index 000000000..cca192db9
+--- /dev/null
++++ b/packages/compiler-core/__tests__/transforms/vBind.spec.ts.patch
+@@ -0,0 +1,19 @@
++--- packages/compiler-core/__tests__/transforms/vBind.spec.ts
+++++ packages/compiler-core/__tests__/transforms/vBind.spec.ts
++@@ -420,4 +420,17 @@
++       ])
++     })
++   })
+++
+++  test('same-name shorthand without expression in DOM template', () => {
+++    const { root, problems } = parseWithVBind('<div :arg></div>', {
+++      prefixIdentifiers: false,
+++    })
+++
+++    // It should compile correctly and not throw
+++    expect(problems.length).toBe(0)
+++    expect(root.children[0].props[0].arg.content).toBe('arg')
+++    expect(root.children[0].props[0].exp.content).toBe('')
+++    expect(root.children[0].props[0].exp.isStatic).toBe(true)
+++  })
++ })
+diff --git a/packages/compiler-core/src/transforms/vBind.ts b/packages/compiler-core/src/transforms/vBind.ts
+index c32df9e36..ddfd7b840 100644
+--- a/packages/compiler-core/src/transforms/vBind.ts
++++ b/packages/compiler-core/src/transforms/vBind.ts
+@@ -33,7 +33,7 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+         ],
+       }
+     } else {
+-      exp = undefined
++      exp = createSimpleExpression('', true, loc)
+     }
+   }
+ 
+diff --git a/reproduction.html b/reproduction.html
+new file mode 100644
+index 000000000..4581c6617
+--- /dev/null
++++ b/reproduction.html
+@@ -0,0 +1,43 @@
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++    <title>Bug Demonstration</title>
++  </head>
++  <body>
++    <div id="app"></div>
++
++    <template id="template-my-comp">
++      <p>{{name}}: param is {{param}}</p>
++    </template>
++
++    <template id="template-app">
++      <!-- NOT WORKING: -->
++      <my-comp name="Fail #1" :param></my-comp>
++      <!-- Working: (comment out the failing case above to see them working) -->
++      <my-comp name="Pass #1" :param="param"></my-comp>
++      <my-comp name="Pass #2" v-bind="{ param }"></my-comp>
++    </template>
++
++    <script src="https://cdn.jsdelivr.net/npm/vue@3.5.22/dist/vue.global.js"></script>
++    <!-- Bug only occuring in v3.5.22, change the version to 3.5.21 to see a working result -->
++    <script>
++      const MyComp = {
++        props: ['name', 'param'],
++        template: '#template-my-comp',
++      };
++
++      const App = {
++        components: { MyComp },
++        setup() {
++          const param = 'orz';
++          return { param };
++        },
++        // Or use: `computed: { param() { return 'orz'; } },`
++        template: '#template-app',
++      };
++
++      Vue.createApp(App).mount('#app');
++    </script>
++  </body>
++</html>
+diff --git a/test-shorthand.cjs b/test-shorthand.cjs
+new file mode 100644
+index 000000000..f1555c188
+--- /dev/null
++++ b/test-shorthand.cjs
+@@ -0,0 +1,11 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js')
++
++try {
++  let result = compile('<div :param></div>', { prefixIdentifiers: false })
++  console.log('Compile 1 (SFC) success:', result.code)
++  
++  result = compile('<div :param></div>', { prefixIdentifiers: false, isRuntimeDOM: true })
++  console.log('Compile 2 (DOM) success:', result.code)
++} catch (e) {
++  console.error('Compile error:', e)
++}
+diff --git a/test-shorthand2.cjs b/test-shorthand2.cjs
+new file mode 100644
+index 000000000..23afafb43
+--- /dev/null
++++ b/test-shorthand2.cjs
+@@ -0,0 +1 @@
++const { compile } = require("./packages/compiler-dom/dist/compiler-dom.cjs.js"); try { const res = compile("<div :PARAM></div>", { isRuntimeDOM: true, isDOMNode: true }); console.log(res.code); } catch(e) { console.error(e) }
+diff --git a/test-shorthand3.js b/test-shorthand3.js
+new file mode 100644
+index 000000000..a1ae2105e
+--- /dev/null
++++ b/test-shorthand3.js
+@@ -0,0 +1,11 @@
++import { compile } from './packages/compiler-dom/dist/compiler-dom.esm-browser.js'
++
++try {
++  let result = compile('<div :param></div>', { prefixIdentifiers: false })
++  console.log('Compile 1 (SFC) success:', result.code)
++  
++  result = compile('<div :param></div>', { prefixIdentifiers: false, isRuntimeDOM: true })
++  console.log('Compile 2 (DOM) success:', result.code)
++} catch (e) {
++  console.error('Compile error:', e)
++}
+diff --git a/test-shorthand4.cjs b/test-shorthand4.cjs
+new file mode 100644
+index 000000000..46267ce81
+--- /dev/null
++++ b/test-shorthand4.cjs
+@@ -0,0 +1,8 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js')
++
++try {
++  const result = compile('<my-comp name="Fail #1" :param></my-comp>', { prefixIdentifiers: false, isRuntimeDOM: true })
++  console.log('Compile 1 (DOM) success:', result.code)
++} catch (e) {
++  console.error('Compile error:', e)
++}
+diff --git a/test-shorthand5.cjs b/test-shorthand5.cjs
+new file mode 100644
+index 000000000..4dc5d9440
+--- /dev/null
++++ b/test-shorthand5.cjs
+@@ -0,0 +1,8 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js')
++
++try {
++  const result = compile('<my-comp name="Fail #1" :param></my-comp>', { prefixIdentifiers: false })
++  console.log('Compile 1 (DOM) success:', result.code)
++} catch (e) {
++  console.error('Compile error:', e)
++}
+diff --git a/test-shorthand6.js b/test-shorthand6.js
+new file mode 100644
+index 000000000..a49994890
+--- /dev/null
++++ b/test-shorthand6.js
+@@ -0,0 +1,28 @@
++import { JSDOM } from 'jsdom'
++
++const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="app"></div><template id="template-app"><my-comp name="Fail #1" :param></my-comp></template></body></html>`)
++global.window = dom.window
++global.document = dom.window.document
++global.SVGElement = dom.window.SVGElement
++global.Element = dom.window.Element
++global.Node = dom.window.Node
++
++const vue = await import('./packages/vue/dist/vue.esm-browser.js');
++const { createApp, h } = vue;
++
++const MyComp = {
++  props: ['name', 'param'],
++  template: '<p>{{name}}: param is {{param}}</p>',
++};
++
++const App = {
++  components: { MyComp },
++  setup() {
++    const param = 'orz';
++    return { param };
++  },
++  template: '#template-app'
++}
++
++createApp(App).mount('#app')
++console.log('Result HTML:', document.body.innerHTML)

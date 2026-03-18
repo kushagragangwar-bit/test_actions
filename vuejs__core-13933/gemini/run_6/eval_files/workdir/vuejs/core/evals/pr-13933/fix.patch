@@ -1,0 +1,396 @@
+diff --git a/debug.cjs b/debug.cjs
+new file mode 100644
+index 000000000..454d82f10
+--- /dev/null
++++ b/debug.cjs
+@@ -0,0 +1,7 @@
++const { compile } = require('vue/compiler-dom');
++try {
++  let res2 = compile('<div :param></div>');
++  console.log('pass', res2.code);
++} catch (e) {
++  console.error(e);
++}
+diff --git a/debug.html b/debug.html
+new file mode 100644
+index 000000000..eed5c69c8
+--- /dev/null
++++ b/debug.html
+@@ -0,0 +1,41 @@
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++    <title>Bug Demonstration</title>
++  </head>
++  <body>
++    <div id="app"></div>
++
++    <template id="template-my-comp">
++      <p>{{name}}: param is {{param}}</p>
++    </template>
++
++    <template id="template-app">
++      <!-- NOT WORKING: -->
++      <my-comp name="Fail #1" :param></my-comp>
++      <!-- Working: (comment out the failing case above to see them working) -->
++      <my-comp name="Pass #1" :param="param"></my-comp>
++      <my-comp name="Pass #2" v-bind="{ param }"></my-comp>
++    </template>
++
++    <script src="./packages/vue/dist/vue.global.js"></script>
++    <script>
++      const MyComp = {
++        props: ['name', 'param'],
++        template: '#template-my-comp',
++      };
++
++      const App = {
++        components: { MyComp },
++        setup() {
++          const param = 'orz';
++          return { param };
++        },
++        template: '#template-app',
++      };
++
++      Vue.createApp(App).mount('#app');
++    </script>
++  </body>
++</html>
+diff --git a/debug_dom.cjs b/debug_dom.cjs
+new file mode 100644
+index 000000000..145b501bf
+--- /dev/null
++++ b/debug_dom.cjs
+@@ -0,0 +1,53 @@
++const { JSDOM } = require('jsdom');
++const fs = require('fs');
++const path = require('path');
++
++const vueCode = fs.readFileSync(path.resolve('./packages/vue/dist/vue.global.js'), 'utf-8');
++
++const html = `
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++    <title>Bug Demonstration</title>
++  </head>
++  <body>
++    <div id="app">
++      <my-comp name="Fail #1" :param></my-comp>
++    </div>
++
++    <script>${vueCode}</script>
++    <script>
++      const MyComp = {
++        props: ['name', 'param'],
++        template: '<p>{{name}}: param is {{param}}</p>',
++      };
++
++      const App = {
++        components: { MyComp },
++        setup() {
++          const param = 'orz';
++          return { param };
++        }
++      };
++
++      try {
++        Vue.createApp(App).mount('#app');
++        console.log('App mounted successfully!');
++        if (typeof window !== "undefined") window.__done = true;
++      } catch (e) {
++        console.error('Error during mount:', e.stack);
++        if (typeof window !== "undefined") window.__done = true;
++      }
++    </script>
++  </body>
++</html>
++`;
++
++const dom = new JSDOM(html, { runScripts: "dangerously" });
++let wait = setInterval(() => {
++  if (dom.window.__done) {
++    clearInterval(wait);
++    console.log(dom.window.document.getElementById('app').innerHTML);
++  }
++}, 100);
+diff --git a/debug_in_dom.html b/debug_in_dom.html
+new file mode 100644
+index 000000000..6fded9cc8
+--- /dev/null
++++ b/debug_in_dom.html
+@@ -0,0 +1,35 @@
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++    <title>Bug Demonstration</title>
++  </head>
++  <body>
++    <div id="app">
++      <my-comp name="Fail #1" :param></my-comp>
++    </div>
++
++    <script src="./packages/vue/dist/vue.global.js"></script>
++    <script>
++      const MyComp = {
++        props: ['name', 'param'],
++        template: '<p>{{name}}: param is {{param}}</p>',
++      };
++
++      const App = {
++        components: { MyComp },
++        setup() {
++          const param = 'orz';
++          return { param };
++        }
++      };
++
++      try {
++        Vue.createApp(App).mount('#app');
++        console.log('App mounted successfully!');
++      } catch (e) {
++        console.error('Error during mount:', e);
++      }
++    </script>
++  </body>
++</html>
+diff --git a/debug_mount.cjs b/debug_mount.cjs
+new file mode 100644
+index 000000000..1cb476c4d
+--- /dev/null
++++ b/debug_mount.cjs
+@@ -0,0 +1,40 @@
++const { JSDOM } = require('jsdom');
++const Vue = require('./packages/vue/dist/vue.cjs.js');
++
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++  </head>
++  <body>
++    <div id="app"></div>
++  </body>
++</html>
++`);
++
++global.window = dom.window;
++global.document = dom.window.document;
++global.SVGElement = dom.window.SVGElement;
++global.MathMLElement = dom.window.MathMLElement;
++
++const MyComp = {
++  props: ['name', 'param'],
++  template: '<p>{{name}}: param is {{param}}</p>',
++};
++
++const App = {
++  components: { MyComp },
++  setup() {
++    const param = 'orz';
++    return { param };
++  },
++  template: '<my-comp name="Fail #1" :param></my-comp>'
++};
++
++try {
++  Vue.createApp(App).mount(dom.window.document.getElementById('app'));
++  console.log('App mounted successfully!');
++} catch (e) {
++  console.error('Error during mount:', e.stack);
++}
+diff --git a/debug_mount.js b/debug_mount.js
+new file mode 100644
+index 000000000..f5ab43817
+--- /dev/null
++++ b/debug_mount.js
+@@ -0,0 +1,42 @@
++import { JSDOM } from 'jsdom';
++import * as Vue from './packages/vue/dist/vue.cjs.js';
++
++const dom = new JSDOM(`
++<!DOCTYPE html>
++<html>
++  <head>
++    <meta charset="utf-8" />
++  </head>
++  <body>
++    <div id="app">
++      <my-comp name="Fail #1" :param></my-comp>
++    </div>
++  </body>
++</html>
++`);
++
++global.window = dom.window;
++global.document = dom.window.document;
++global.SVGElement = dom.window.SVGElement;
++global.MathMLElement = dom.window.MathMLElement;
++global.HTMLElement = dom.window.HTMLElement;
++
++const MyComp = {
++  props: ['name', 'param'],
++  template: '<p>{{name}}: param is {{param}}</p>',
++};
++
++const App = {
++  components: { MyComp },
++  setup() {
++    const param = 'orz';
++    return { param };
++  },
++};
++
++try {
++  Vue.createApp(App).mount(dom.window.document.getElementById('app'));
++  console.log('App mounted successfully!');
++} catch (e) {
++  console.error('Error during mount:', e.stack);
++}
+diff --git a/debug_puppeteer.cjs b/debug_puppeteer.cjs
+new file mode 100644
+index 000000000..6adedb2ed
+--- /dev/null
++++ b/debug_puppeteer.cjs
+@@ -0,0 +1,10 @@
++const puppeteer = require('puppeteer');
++(async () => {
++  const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
++  const page = await browser.newPage();
++  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
++  page.on('pageerror', err => console.log('PAGE ERROR:', err.toString()));
++  await page.goto('http://localhost:8080/debug.html');
++  await page.waitForTimeout(1000);
++  await browser.close();
++})();
+diff --git a/debug_tmp.cjs b/debug_tmp.cjs
+new file mode 100644
+index 000000000..2dc54ad60
+--- /dev/null
++++ b/debug_tmp.cjs
+@@ -0,0 +1,12 @@
++const vue = require('./packages/vue/dist/vue.cjs.js');
++const domCode = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++
++try {
++  let ast = domCode.compile('<my-comp :param=""></my-comp>').ast;
++  let props = ast.children[0].codegenNode.props.properties;
++  
++  let d1 = props[0].value;
++  console.log(d1);
++} catch (e) {
++  console.log(e.stack);
++}
+diff --git a/debug_tmp2.cjs b/debug_tmp2.cjs
+new file mode 100644
+index 000000000..e9558ddb6
+--- /dev/null
++++ b/debug_tmp2.cjs
+@@ -0,0 +1,16 @@
++const fs = require('fs');
++const code = fs.readFileSync('./packages/compiler-dom/dist/compiler-dom.global.js', 'utf-8');
++const { JSDOM } = require('jsdom');
++const dom = new JSDOM(`<body></body>`, { runScripts: "dangerously" });
++const scriptEl = dom.window.document.createElement("script");
++scriptEl.textContent = code;
++dom.window.document.head.appendChild(scriptEl);
++
++dom.window.eval(`
++  try {
++    let res2 = VueCompilerDOM.compile('<div :[arg]=""></div>', { onError: (e) => {} });
++    console.log(JSON.stringify(res2.ast.children[0].codegenNode.props.arguments[0].properties[0], null, 2));
++  } catch (e) {
++    console.log(e.stack);
++  }
++`);
+diff --git a/debug_tmp3.cjs b/debug_tmp3.cjs
+new file mode 100644
+index 000000000..79108eab4
+--- /dev/null
++++ b/debug_tmp3.cjs
+@@ -0,0 +1,16 @@
++const fs = require('fs');
++const code = fs.readFileSync('./packages/vue/dist/vue.global.js', 'utf-8');
++const { JSDOM } = require('jsdom');
++const dom = new JSDOM(`<body></body>`, { runScripts: "dangerously" });
++const scriptEl = dom.window.document.createElement("script");
++scriptEl.textContent = code;
++dom.window.document.head.appendChild(scriptEl);
++
++dom.window.eval(`
++  try {
++    let res2 = Vue.compile('<div :[arg]=""></div>');
++    console.log(res2.toString());
++  } catch (e) {
++    console.log(e.stack);
++  }
++`);
+diff --git a/debug_vbind.js b/debug_vbind.js
+new file mode 100644
+index 000000000..454d82f10
+--- /dev/null
++++ b/debug_vbind.js
+@@ -0,0 +1,7 @@
++const { compile } = require('vue/compiler-dom');
++try {
++  let res2 = compile('<div :param></div>');
++  console.log('pass', res2.code);
++} catch (e) {
++  console.error(e);
++}
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..9697a2b43 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -15,7 +15,10 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        (!prop.exp ||
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+diff --git a/packages/compiler-core/src/transforms/vBind.ts b/packages/compiler-core/src/transforms/vBind.ts
+index c32df9e36..b896c5780 100644
+--- a/packages/compiler-core/src/transforms/vBind.ts
++++ b/packages/compiler-core/src/transforms/vBind.ts
+@@ -32,8 +32,6 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+           createObjectProperty(arg, createSimpleExpression('', true, loc)),
+         ],
+       }
+-    } else {
+-      exp = undefined
+     }
+   }
+ 
+diff --git a/reproduce.cjs b/reproduce.cjs
+new file mode 100644
+index 000000000..5146c180c
+--- /dev/null
++++ b/reproduce.cjs
+@@ -0,0 +1,7 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++try {
++  let res2 = compile('<my-comp name="Fail #1" :param></my-comp>', { onError: err => console.error('Er', err) });
++  console.log('pass', res2.code);
++} catch (e) {
++  console.error(e);
++}
+diff --git a/test.cjs b/test.cjs
+new file mode 100644
+index 000000000..26a2498b6
+--- /dev/null
++++ b/test.cjs
+@@ -0,0 +1,3 @@
++const { compile } = require('./packages/compiler-dom/dist/compiler-dom.cjs.js');
++let ast = compile('<my-comp :param></my-comp>', { prefixIdentifiers: false }).ast;
++console.log(JSON.stringify(ast, null, 2));

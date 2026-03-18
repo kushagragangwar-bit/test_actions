@@ -1,0 +1,114 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..ee13290c5
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,42 @@
++# Vue Core Repository - Agent Memory
++
++## Repository Structure
++- `packages/compiler-core/` - Core template compiler (AST, transforms, codegen)
++- `packages/compiler-dom/` - DOM-specific compiler transforms
++- `packages/compiler-sfc/` - SFC (Single-File Component) compiler
++- `packages/runtime-core/` - Core runtime (reactivity, vnode, scheduler)
++- `packages/runtime-dom/` - DOM runtime
++- `packages/shared/` - Shared utilities
++
++## Build-time Constants
++- `__BROWSER__` - `true` in browser build, `false` elsewhere (tests use `false`)
++- `__DEV__` - `true` in development mode
++- `__SSR__` - `true` for SSR builds
++- These are declared in `packages/global.d.ts` and set in `vitest.config.ts`
++
++## Key Transforms
++- `transformVBindShorthand.ts` - Handles same-name shorthand (`:arg` → `:arg="arg"`)
++  - Runs as a NodeTransform BEFORE DirectiveTransforms
++- `vBind.ts` - DirectiveTransform for `v-bind` with arg
++
++## Bug Fix: v-bind Same-Name Shorthand in In-DOM Templates (v3.5.22)
++**File**: `packages/compiler-core/src/transforms/transformVBindShorthand.ts`
++
++**Root Cause**: In browser in-DOM templates, browsers normalize HTML attributes: `:param` (no value) is parsed as `:param=""` (empty string value). When `transformVBindShorthand.ts` only checked `!prop.exp` (null/undefined), it missed the browser-normalized empty string case. This caused `vBind.ts` to set `exp = undefined` and then crash at `createObjectProperty(arg, exp!)`.
++
++**Fix**: In `transformVBindShorthand.ts`, additionally treat empty string expressions as same-name shorthands when `__BROWSER__` is `true`.
++
++```typescript
++(!prop.exp ||
++  // in-DOM templates, the browser parses :arg as :arg="" (empty string)
++  (__BROWSER__ &&
++    prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++    !prop.exp.content.trim()))
++```
++
++The `__BROWSER__` guard preserves non-browser behavior where `v-bind:arg=""` (explicit empty) is an error.
++
++## Testing
++- Tests run: `pnpm test --project=unit packages/compiler-core/__tests__/transforms/vBind.spec.ts`
++- All tests use `__BROWSER__ = false` (set in `vitest.config.ts`)
++- Browser-specific behavior can only be tested in actual browser builds
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..51167db2d 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -15,7 +15,11 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        (!prop.exp ||
++          // in-DOM templates, the browser parses :arg as :arg="" (empty string)
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+diff --git a/reproduce.ts b/reproduce.ts
+new file mode 100644
+index 000000000..68de0ac75
+--- /dev/null
++++ b/reproduce.ts
+@@ -0,0 +1,43 @@
++// Reproduction script for v-bind same-name shorthand in in-DOM templates
++// In the browser, :param gets parsed as :param="" (with empty string value)
++// This should still trigger the same-name shorthand expansion
++
++import { NodeTypes, baseParse as parse, transform } from './packages/compiler-core/src'
++import { transformBind } from './packages/compiler-core/src/transforms/vBind'
++import { transformElement } from './packages/compiler-core/src/transforms/transformElement'
++import { transformVBindShorthand } from './packages/compiler-core/src/transforms/transformVBindShorthand'
++import type { ElementNode, VNodeCall, ObjectExpression } from './packages/compiler-core/src'
++
++function parseWithVBind(template: string): ElementNode {
++  const ast = parse(template)
++  transform(ast, {
++    nodeTransforms: [transformVBindShorthand, transformElement],
++    directiveTransforms: {
++      bind: transformBind,
++    },
++  })
++  return ast.children[0] as ElementNode
++}
++
++// Test 1: Non-browser case - `:param` without value (this is the regular case)
++console.log('Test 1: :param without value (regular shorthand)')
++try {
++  const node = parseWithVBind(`<div :param />`)
++  const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++  console.log('  Result:', JSON.stringify(props.properties[0], null, 2))
++  console.log('  PASS')
++} catch (e) {
++  console.log('  FAIL:', e)
++}
++
++// Test 2: Browser in-DOM case - `:param=""` (browser parses :param as :param="")
++// This simulates what the browser does when it parses in-DOM templates
++console.log('\nTest 2: :param="" (simulating browser in-DOM template parsing)')
++try {
++  const node = parseWithVBind(`<div :param="" />`)
++  const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++  console.log('  Result:', JSON.stringify(props.properties[0], null, 2))
++  console.log('  PASS')
++} catch (e) {
++  console.log('  FAIL:', e)
++}

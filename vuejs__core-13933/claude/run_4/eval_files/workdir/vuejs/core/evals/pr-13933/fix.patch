@@ -1,0 +1,21 @@
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..e4a6b8c52 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -12,10 +12,15 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+   if (node.type === NodeTypes.ELEMENT) {
+     for (const prop of node.props) {
+       // same-name shorthand - :arg is expanded to :arg="arg"
++      // in browser (in-DOM) templates, :arg is parsed as :arg="" by the browser
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        prop.arg &&
++        (!prop.exp ||
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {

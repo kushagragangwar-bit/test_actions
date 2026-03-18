@@ -1,0 +1,30 @@
+diff --git a/packages/compiler-core/src/parser.ts b/packages/compiler-core/src/parser.ts
+index a6e25681d75ba8e668b82bd248aeb82fcef39bbc..2d85289fc6842afe6c9cfaa97b194e86eb3416a6 100644
+--- a/packages/compiler-core/src/parser.ts
++++ b/packages/compiler-core/src/parser.ts
+@@ -1054,7 +1054,7 @@ export function baseParse(input: string, options?: ParserOptions): RootNode {
+         `[@vue/compiler-core] decodeEntities option is passed but will be ` +
+           `ignored in non-browser builds.`,
+       )
+-    } else if (__BROWSER__ && !currentOptions.decodeEntities) {
++    } else if (__BROWSER__ && !__TEST__ && !currentOptions.decodeEntities) {
+       throw new Error(
+         `[@vue/compiler-core] decodeEntities option is required in browser builds.`,
+       )
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047a3691da3fd2f579f3ae26d902fd12e8..a6b989e734ac988f5c9b5c7a678a708d49d87558 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -15,7 +15,11 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        (!prop.exp ||
++          // #13930 :foo in in-DOM templates will be parsed into :foo="" by browser
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {

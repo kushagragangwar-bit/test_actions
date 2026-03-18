@@ -1,0 +1,136 @@
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..eb59e3ac2 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -12,10 +12,14 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+   if (node.type === NodeTypes.ELEMENT) {
+     for (const prop of node.props) {
+       // same-name shorthand - :arg is expanded to :arg="arg"
++      // in browser (in-DOM templates), :foo is parsed as :foo="" by the browser
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        (!prop.exp ||
++          (__BROWSER__ &&
++            prop.exp.type === NodeTypes.SIMPLE_EXPRESSION &&
++            !prop.exp.content.trim()))
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+diff --git a/packages/compiler-core/src/transforms/vBind.ts b/packages/compiler-core/src/transforms/vBind.ts
+index c32df9e36..1f507116f 100644
+--- a/packages/compiler-core/src/transforms/vBind.ts
++++ b/packages/compiler-core/src/transforms/vBind.ts
+@@ -27,13 +27,9 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+       context.onError(
+         createCompilerError(ErrorCodes.X_V_BIND_NO_EXPRESSION, loc),
+       )
+-      return {
+-        props: [
+-          createObjectProperty(arg, createSimpleExpression('', true, loc)),
+-        ],
+-      }
+-    } else {
+-      exp = undefined
++    }
++    return {
++      props: [createObjectProperty(arg, createSimpleExpression('', true, loc))],
+     }
+   }
+ 
+diff --git a/reproduce-issue.ts b/reproduce-issue.ts
+new file mode 100644
+index 000000000..efb477ed4
+--- /dev/null
++++ b/reproduce-issue.ts
+@@ -0,0 +1,89 @@
++// Reproduction script for v-bind same-name shorthand crash in in-DOM templates
++// In browser, :param becomes :param="" (empty string attribute value)
++// This simulates what the browser does to bare attributes
++
++import {
++  NodeTypes,
++  type ElementNode,
++  type ObjectExpression,
++  type VNodeCall,
++  baseParse as parse,
++  transform,
++  createSimpleExpression,
++  ConstantTypes,
++} from './packages/compiler-core/src'
++import { transformBind } from './packages/compiler-core/src/transforms/vBind'
++import { transformElement } from './packages/compiler-core/src/transforms/transformElement'
++import { transformVBindShorthand } from './packages/compiler-core/src/transforms/transformVBindShorthand'
++
++// Simulate what happens in the browser: :param becomes :param=""
++// The parser would create prop.exp = SimpleExpressionNode("") instead of undefined
++
++function parseWithVBind(template: string): ElementNode {
++  const ast = parse(template)
++  transform(ast, {
++    nodeTransforms: [transformVBindShorthand, transformElement],
++    directiveTransforms: {
++      bind: transformBind,
++    },
++  })
++  return ast.children[0] as ElementNode
++}
++
++// Test 1: Normal non-browser behavior - bare attribute without value
++console.log('Test 1: Bare attribute (non-browser, :param without value)')
++try {
++  const node = parseWithVBind(`<div :param />`)
++  const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++  const prop = props.properties[0]
++  console.log('  key:', (prop.key as any).content)
++  console.log('  value:', (prop.value as any).content)
++  console.log('  PASS: key=param, value=param (same-name shorthand)')
++} catch (e: any) {
++  console.log('  FAIL:', e.message)
++}
++
++// Test 2: Simulate browser behavior - :param becomes :param="" (empty string)
++console.log('\nTest 2: Browser-like behavior - :param becomes :param="" (empty string)')
++console.log('  NOTE: This test simulates the browser converting :param to :param=""')
++
++// We need to manually create an AST that simulates the browser case
++// where :param has an empty string expression
++import { NodeTypes as NT } from './packages/compiler-core/src/ast'
++const ast = parse(`<div :param />`)
++const dirNode = ((ast.children[0] as ElementNode).props[0]) as any
++// Manually set exp to empty string (simulating browser parsing)
++dirNode.exp = createSimpleExpression('', false, dirNode.loc, ConstantTypes.NOT_CONSTANT)
++
++try {
++  transform(ast, {
++    nodeTransforms: [transformVBindShorthand, transformElement],
++    directiveTransforms: {
++      bind: transformBind,
++    },
++  })
++  const node = ast.children[0] as ElementNode
++  const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++  const prop = props.properties[0]
++  console.log('  key:', (prop.key as any).content)
++  console.log('  value:', (prop.value as any)?.content)
++  console.log('  PASS: key=param, value=param (same-name shorthand works)')
++} catch (e: any) {
++  console.log('  FAIL:', e.message)
++}
++
++// Test 3: Simulate actual in-DOM template format (browser parses :param as :param="")
++console.log('\nTest 3: Actual in-DOM template (:param="" as browser sends it)')
++try {
++  // In the browser, the innerHTML would contain :param="" 
++  // Vue's parser would parse this as a directive with empty exp
++  const node = parseWithVBind(`<div :param="" />`)
++  const props = (node.codegenNode as VNodeCall).props as ObjectExpression
++  const prop = props.properties[0]
++  console.log('  key:', (prop.key as any).content)
++  console.log('  value:', (prop.value as any)?.content)
++  console.log('  Expected in browser mode: key=param, value=param (same-name shorthand)')
++  console.log('  Expected in non-browser mode: error (empty expression)')
++} catch (e: any) {
++  console.log('  FAIL:', e.message)
++}

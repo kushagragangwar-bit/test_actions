@@ -1,0 +1,56 @@
+diff --git a/packages/compiler-core/src/transforms/transformElement.ts b/packages/compiler-core/src/transforms/transformElement.ts
+index 1dca0c514..9c4bd8d1d 100644
+--- a/packages/compiler-core/src/transforms/transformElement.ts
++++ b/packages/compiler-core/src/transforms/transformElement.ts
+@@ -446,17 +446,18 @@ export function buildProps(
+         hasVnodeHook = true
+       }
+ 
+-      if (isEventHandler && value.type === NodeTypes.JS_CALL_EXPRESSION) {
++      if (isEventHandler && value && value.type === NodeTypes.JS_CALL_EXPRESSION) {
+         // handler wrapped with internal helper e.g. withModifiers(fn)
+         // extract the actual expression
+         value = value.arguments[0] as JSChildNode
+       }
+ 
+       if (
+-        value.type === NodeTypes.JS_CACHE_EXPRESSION ||
++        value &&
++        (value.type === NodeTypes.JS_CACHE_EXPRESSION ||
+         ((value.type === NodeTypes.SIMPLE_EXPRESSION ||
+           value.type === NodeTypes.COMPOUND_EXPRESSION) &&
+-          getConstantType(value, context) > 0)
++          getConstantType(value, context) > 0))
+       ) {
+         // skip if the prop is a cached handler or has constant value
+         return
+diff --git a/packages/compiler-core/src/transforms/transformVBindShorthand.ts b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+index ff5b51047..73a6042c7 100644
+--- a/packages/compiler-core/src/transforms/transformVBindShorthand.ts
++++ b/packages/compiler-core/src/transforms/transformVBindShorthand.ts
+@@ -15,7 +15,8 @@ export const transformVBindShorthand: NodeTransform = (node, context) => {
+       if (
+         prop.type === NodeTypes.DIRECTIVE &&
+         prop.name === 'bind' &&
+-        !prop.exp
++        prop.arg &&
++        prop.exp === undefined
+       ) {
+         const arg = prop.arg!
+         if (arg.type !== NodeTypes.SIMPLE_EXPRESSION || !arg.isStatic) {
+diff --git a/packages/compiler-core/src/transforms/vBind.ts b/packages/compiler-core/src/transforms/vBind.ts
+index c32df9e36..dc29da65b 100644
+--- a/packages/compiler-core/src/transforms/vBind.ts
++++ b/packages/compiler-core/src/transforms/vBind.ts
+@@ -37,6 +37,11 @@ export const transformBind: DirectiveTransform = (dir, _node, context) => {
+     }
+   }
+ 
++  if (!exp) {
++    // #10280 for browser-builds just map to empty string when exp is missing/empty
++    exp = createSimpleExpression('', true, loc)
++  }
++
+   if (arg.type !== NodeTypes.SIMPLE_EXPRESSION) {
+     arg.children.unshift(`(`)
+     arg.children.push(`) || ""`)
